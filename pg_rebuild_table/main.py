@@ -598,7 +598,6 @@ class Command:
             '--table_full_name',
             type=str,
             help='table full name ',
-            default=2
         )
         arg_parser.add_argument(
             '-ac',
@@ -642,6 +641,8 @@ class Command:
             help='only validate constraint on "table_full_name"',
         )
         arg_parser.add_argument(
+            '-d',
+            '--dbname',
             'dbname',
             help='source database name'
         )
