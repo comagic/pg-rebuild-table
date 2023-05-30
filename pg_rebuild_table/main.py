@@ -12,10 +12,6 @@ from pg_rebuild_table.connection import Database
 
 __version__ = '0.0.2'
 
-# Кластеризация таблицы по PK
-# Очистка данных
-# TODO: Переупорядочивание колонок (пока не сделано, но стоит задуматься)
-
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s: %(message)s",
@@ -30,7 +26,7 @@ class PgRebuildTable:
 
     service_schema = 'rebuild_table'
     min_delta_rows = 10000
-    # statement_timeout = 900000 # 15 минут
+    # statement_timeout = 900000 # 15 min
     work_mem = '1GB'
     # lock_timeout = '1s'
     # chunk_limit = 100000
@@ -692,7 +688,7 @@ def main():
     try:
         loop.run_until_complete(cmd.start())
     except Exception:
-        raise Exception('Все плохо...')
+        raise Exception('pg_rebuild_table error...')
     finally:
         loop.run_until_complete(cmd.stop())
 
