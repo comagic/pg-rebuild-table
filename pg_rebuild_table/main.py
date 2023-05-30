@@ -23,13 +23,9 @@ logging.basicConfig(
 class PgRebuildTable:
     TABLE_INFO_QUERY = Path(__file__).parent / 'sql' / 'table_info_query.sql'
     logger = logging.getLogger('PgRebuildTable')
-
     service_schema = 'rebuild_table'
     min_delta_rows = 10000
-    # statement_timeout = 900000 # 15 min
     work_mem = '1GB'
-    # lock_timeout = '1s'
-    # chunk_limit = 100000
 
     def __init__(
         self,
