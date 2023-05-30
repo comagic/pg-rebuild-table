@@ -4,9 +4,11 @@
 Installation:
 --------------------
 - **1 step**
+
   ``git clone git@github.com:comagic/pg-rebuild-table.git``
 
 - **2 step**
+
   ``pip install -e ./pg-rebuild-table/``
 
 Restrictions:
