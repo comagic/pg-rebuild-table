@@ -3,12 +3,16 @@
 
 Installation:
 --------------------
-
 - 1 step
   ``git clone git@github.com:comagic/pg-rebuild-table.git``
 
 - 2 step
   ``pip install -e ./pg-rebuild-table/``
+
+Restrictions:
+--------------------
+- Only superusers can use the utility.
+- Target table must have a PRIMARY KEY.
 
 Options:
 --------------------
