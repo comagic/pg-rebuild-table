@@ -55,7 +55,6 @@ Options:
         --table_full_name
             Full table name to rebuild with pg_rebuild_table
 
-
         -ac
         --additional_condition
             An optional condition on which the data will be recollected

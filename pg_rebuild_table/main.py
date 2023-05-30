@@ -554,60 +554,60 @@ class Command:
         arg_parser.add_argument(
             '--clean',
             action="store_true",
-            help='clean out_dir if not empty'
+            help='clean out_dir if not empty.'
         )
         arg_parser.add_argument(
             '-h', '--host',
             type=str,
-            help='host for connect db'
+            help='host for connect db.'
         )
         arg_parser.add_argument(
             '-p', '--port',
             type=str,
-            help='port for connect db'
+            help='port for connect db.'
         )
         arg_parser.add_argument(
             '-U',
             '--username',
             type=str,
-            help='user for connect db'
+            help='user for connect db.'
         )
         arg_parser.add_argument(
             '-W',
             '--password',
             type=str,
-            help='password for connect db'
+            help='password for connect db.'
         )
         arg_parser.add_argument(
             '-j',
             '--jobs',
             type=int,
-            help='number of connections',
+            help='number of connections.',
             default=2
         )
         arg_parser.add_argument(
             '-T',
             '--table_full_name',
             type=str,
-            help='table full name ',
+            help='table full name.',
         )
         arg_parser.add_argument(
             '-ac',
             '--additional_condition',
             type=str,
-            help='additional condition for copying data'
+            help='additional condition for copying data.'
         )
         arg_parser.add_argument(
             '-cl',
             '--chunk_limit',
             type=str,
-            help='numerical value of the chunk size limit for data transfer. by default the table overlaps completely in one pass'
+            help='numerical value of the chunk size limit for data transfer. by default the table overlaps completely in one pass.'
         )
         arg_parser.add_argument(
             '-st',
             '--statement_timeout',
             type=str,
-            help='maximum request execution time. (ms)',
+            help='maximum request execution time.',
             default=900000
         )
         arg_parser.add_argument(
