@@ -12,10 +12,10 @@ from pg_rebuild_table.connection import Database
 
 __version__ = '0.0.2'
 
+
 # Кластеризация таблицы по PK
 # Очистка данных
 # TODO: Переупорядочивание колонок (пока не сделано, но стоит задуматься)
-
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s: %(message)s",
@@ -27,13 +27,9 @@ logging.basicConfig(
 class PgRebuildTable:
     TABLE_INFO_QUERY = Path(__file__).parent / 'sql' / 'table_info_query.sql'
     logger = logging.getLogger('PgRebuildTable')
-
     service_schema = 'rebuild_table'
     min_delta_rows = 10000
-    # statement_timeout = 900000 # 15 минут
     work_mem = '1GB'
-    # lock_timeout = '1s'
-    # chunk_limit = 100000
 
     def __init__(
         self,
@@ -55,18 +51,19 @@ class PgRebuildTable:
             self.only_steps.append('switch')
         if only_validate_constraints:
             self.only_steps.append('validate_constraints')
-        table_full_name = table_full_name.split('.')
+        if table_full_name:
+            table_full_name = table_full_name.split('.')
+            if len(table_full_name) > 1:
+                self.schema_name = table_full_name[0]
+                self.table_name = table_full_name[1]
+            else:
+                self.schema_name = 'public'
+                self.table_name = table_full_name[0]
         self.additional_condition = additional_condition
         self.make_backup = make_backup
         self.chunk_limit = chunk_limit
         self.statement_timeout = statement_timeout
         self.lock_timeout = lock_timeout
-        if len(table_full_name) > 1:
-            self.schema_name = table_full_name[0]
-            self.table_name = table_full_name[1]
-        else:
-            self.schema_name = 'public'
-            self.table_name = table_full_name[0]
 
     async def _get_table(self):
         self.logger.info(f'Get table info "{self.schema_name}"."{self.table_name}"')
@@ -562,61 +559,60 @@ class Command:
         arg_parser.add_argument(
             '--clean',
             action="store_true",
-            help='clean out_dir if not empty'
+            help='clean out_dir if not empty.'
         )
         arg_parser.add_argument(
             '-h', '--host',
             type=str,
-            help='host for connect db'
+            help='host for connect db.'
         )
         arg_parser.add_argument(
             '-p', '--port',
             type=str,
-            help='port for connect db'
+            help='port for connect db.'
         )
         arg_parser.add_argument(
             '-U',
             '--username',
             type=str,
-            help='user for connect db'
+            help='user for connect db.'
         )
         arg_parser.add_argument(
             '-W',
             '--password',
             type=str,
-            help='password for connect db'
+            help='password for connect db.'
         )
         arg_parser.add_argument(
             '-j',
             '--jobs',
             type=int,
-            help='number of connections',
+            help='number of connections.',
             default=2
         )
         arg_parser.add_argument(
             '-T',
             '--table_full_name',
             type=str,
-            help='table full name ',
-            default=2
+            help='table full name.',
         )
         arg_parser.add_argument(
             '-ac',
             '--additional_condition',
             type=str,
-            help='additional condition for copying data'
+            help='additional condition for copying data.'
         )
         arg_parser.add_argument(
             '-cl',
             '--chunk_limit',
             type=str,
-            help='numerical value of the chunk size limit for data transfer. by default the table overlaps completely in one pass'
+            help='numerical value of the chunk size limit for data transfer. by default the table overlaps completely in one pass.'
         )
         arg_parser.add_argument(
             '-st',
             '--statement_timeout',
             type=str,
-            help='maximum request execution time. (ms)',
+            help='maximum request execution time.',
             default=900000
         )
         arg_parser.add_argument(
@@ -642,7 +638,8 @@ class Command:
             help='only validate constraint on "table_full_name"',
         )
         arg_parser.add_argument(
-            'dbname',
+            '-d',
+            '--dbname',
             help='source database name'
         )
         args = arg_parser.parse_args()
@@ -691,7 +688,7 @@ def main():
     try:
         loop.run_until_complete(cmd.start())
     except Exception:
-        raise Exception('Все плохо...')
+        raise Exception('pg_rebuild_table error...')
     finally:
         loop.run_until_complete(cmd.stop())
 
