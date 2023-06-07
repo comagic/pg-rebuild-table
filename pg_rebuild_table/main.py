@@ -10,22 +10,22 @@ from munch import Munch
 from pg_rebuild_table.acl import acl_to_grants
 from pg_rebuild_table.connection import Database
 
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 
 # Кластеризация таблицы по PK
 # Очистка данных
-# TODO: Переупорядочивание колонок (пока не сделано, но стоит задуматься)
+# TODO: Переупорядочивание колонок
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s: %(message)s",
     datefmt='%Y-%m-%d %H:%M:%S',
-    level=logging.INFO
+    level=logging.DEBUG
 )
 
 
 class PgRebuildTable:
-    TABLE_INFO_QUERY = Path(__file__).parent / 'sql' / 'table_info_query.sql'
+    TABLE_INFO_QUERY = open(Path(__file__).parent / 'sql' / 'table_info_query.sql').read()
     logger = logging.getLogger('PgRebuildTable')
     service_schema = 'rebuild_table'
     min_delta_rows = 10000
@@ -67,6 +67,7 @@ class PgRebuildTable:
 
     async def _get_table(self):
         self.logger.info(f'Get table info "{self.schema_name}"."{self.table_name}"')
+        self.logger.info(f'{self.TABLE_INFO_QUERY=}')
         self.table = Munch.fromDict(
             dict(
                 await self.db.conn.fetchrow(
@@ -76,6 +77,7 @@ class PgRebuildTable:
                 )
             )
         )
+        self.logger.info(f'{self.table=}')
         self.new_table_full_name = f'"{self.table.schema_name}"."{self.table.table_name}__new"'
         self.delta_table_full_name = f'"{self.table.schema_name}"."{self.table.table_name}__delta"'
 
