@@ -67,7 +67,6 @@ class PgRebuildTable:
 
     async def _get_table(self):
         self.logger.info(f'Get table info "{self.schema_name}"."{self.table_name}"')
-        self.logger.info(f'{self.TABLE_INFO_QUERY=}')
         self.table = Munch.fromDict(
             dict(
                 await self.db.conn.fetchrow(
@@ -77,7 +76,6 @@ class PgRebuildTable:
                 )
             )
         )
-        self.logger.info(f'{self.table=}')
         self.new_table_full_name = f'"{self.table.schema_name}"."{self.table.table_name}__new"'
         self.delta_table_full_name = f'"{self.table.schema_name}"."{self.table.table_name}__delta"'
 
