@@ -5,7 +5,7 @@ Installation:
 --------------------
 - **1 step**
 
-  ``git clone git@github.com:comagic/pg-rebuild-table.git``
+  ``git clone https://github.com/comagic/pg-rebuild-table.git``
 
 - **2 step**
 
@@ -79,3 +79,9 @@ Options:
 
         --only_validate_constraints
             If the parameter is set, then invalid constraints on the table are searched for and validation is started.
+
+
+Examples:
+--------------------
+- Rebuild the table with data that satisfies the condition. transfusion of data to carry out in chunks of 100,000 lines.
+``pg_rebuild_table -p 5432 -h /tmp -d database_name --chunk_limit 100000 -T employee -ac 't.app_id in (select app.id from app)'``

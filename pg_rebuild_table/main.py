@@ -16,11 +16,12 @@ __version__ = '0.0.4'
 # Кластеризация таблицы по PK
 # Очистка данных
 # TODO: Переупорядочивание колонок
+# TODO: Изменение типа колонки
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s: %(message)s",
     datefmt='%Y-%m-%d %H:%M:%S',
-    level=logging.DEBUG
+    level=logging.INFO
 )
 
 

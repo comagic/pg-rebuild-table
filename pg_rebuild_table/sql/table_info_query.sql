@@ -3,6 +3,7 @@ select n.nspname as schema_name,
        tn.table_name as table_full_name,
        pk.pk_columns,
        cf.columns,
+       cf.ordered_columns,
        p.grant_privileges,
        d.comment,
        sp.storage_parameters,
@@ -49,11 +50,19 @@ select n.nspname as schema_name,
   left join pg_index ind
          on ind.indrelid = c.oid and
             ind.indisreplident
- cross join lateral (select array_agg(f.attname order by f.attnum) as columns
-                       from pg_attribute f
-                      where f.attrelid = c.oid and
-                            f.attnum > 0 and
-                            not f.attisdropped) cf
+ cross join lateral (select array_agg(f.attname order by f.attnum) as columns,
+                            array_agg(f.attname order by t.typlen desc, ck.key, t.typname) as ordered_columns
+                       from pg_attribute a
+                      inner join pg_type t
+                              on t.oid = a.atttypid
+                       left join pg_constraint pk
+                           cross join unnest(pk.conkey) with ordinality ck(key, rn)
+                              on pk.conrelid = c.oid and
+                                 pk.contype = 'p' and
+                                 a.attnum = ck.key
+                      where a.attrelid = c.oid and
+                            a.attnum >= 0 and
+                            not a.attisdropped) cf
   left join lateral (select format('comment on table "%s"."%s__new" is %L;',
                                    n.nspname,
                                    c.relname,
