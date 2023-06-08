@@ -3,7 +3,7 @@ select n.nspname as schema_name,
        tn.table_name as table_full_name,
        pk.pk_columns,
        cf.columns,
-       cf.ordered_columns,
+       -- cf.ordered_columns,
        p.grant_privileges,
        d.comment,
        sp.storage_parameters,
@@ -50,8 +50,8 @@ select n.nspname as schema_name,
   left join pg_index ind
          on ind.indrelid = c.oid and
             ind.indisreplident
- cross join lateral (select array_agg(f.attname order by f.attnum) as columns,
-                            array_agg(f.attname order by t.typlen desc, ck.key, t.typname) as ordered_columns
+ cross join lateral (select array_agg(a.attname order by a.attnum) as columns,
+                            array_agg(a.attname order by t.typlen desc, ck.key, t.typname) as ordered_columns
                        from pg_attribute a
                       inner join pg_type t
                               on t.oid = a.atttypid
