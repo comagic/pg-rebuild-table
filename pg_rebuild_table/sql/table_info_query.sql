@@ -3,7 +3,7 @@ select n.nspname as schema_name,
        tn.table_name as table_full_name,
        pk.pk_columns,
        cf.columns,
-       -- cf.ordered_columns,
+       cf.ordered_columns,
        p.grant_privileges,
        d.comment,
        sp.storage_parameters,
@@ -50,19 +50,59 @@ select n.nspname as schema_name,
   left join pg_index ind
          on ind.indrelid = c.oid and
             ind.indisreplident
- cross join lateral (select array_agg(a.attname order by a.attnum) as columns,
-                            array_agg(a.attname order by t.typlen desc, ck.key, t.typname) as ordered_columns
-                       from pg_attribute a
-                      inner join pg_type t
-                              on t.oid = a.atttypid
-                       left join pg_constraint pk
-                           cross join unnest(pk.conkey) with ordinality ck(key, rn)
-                              on pk.conrelid = c.oid and
-                                 pk.contype = 'p' and
-                                 a.attnum = ck.key
-                      where a.attrelid = c.oid and
-                            a.attnum >= 0 and
-                            not a.attisdropped) cf
+ cross join lateral (select json_agg(x.column order by x.attnum) as columns,
+                            json_agg(x.column order by x.typlen desc, x.key, x.typname, x.attname) as ordered_columns
+                       from (select json_build_object(
+                                      'name', quote_ident(a.attname),
+                                      'type', case
+                                                when s.is_serial
+                                                  then case ft.type
+                                                         when 'integer'
+                                                           then 'serial'
+                                                         when 'bigint'
+                                                           then 'bigserial'
+                                                       end
+                                                else ft.type
+                                              end,
+                                      'collate', quote_ident(coll.collname),
+                                      'not_null', a.attnotnull and not s.is_serial,
+                                      'default', case
+                                                   when not s.is_serial
+                                                     then pg_get_expr(cd.adbin, cd.adrelid)
+                                                 end,
+                                      'comment', quote_literal(d.description),
+                                      'acl', a.attacl,
+                                      'statistics', nullif(a.attstattarget, -1)
+                                    ) as column,
+                                    a.attname,
+                                    a.attnum,
+                                    ct.typlen,
+                                    ct.typname,
+                                    ck.key
+                               from pg_attribute a
+                              inner join pg_type ct
+                                      on ct.oid = a.atttypid
+                               left join pg_constraint pk
+                                   cross join unnest(pk.conkey) with ordinality ck(key, rn)
+                                      on pk.conrelid = c.oid and
+                                         pk.contype = 'p' and
+                                         a.attnum = ck.key
+                               left join pg_collation coll
+                                      on coll.oid = a.attcollation and
+                                          a.attcollation <> ct.typcollation
+                               left join pg_attrdef cd
+                                      on cd.adrelid = a.attrelid and
+                                         cd.adnum = a.attnum
+                               left join pg_description d
+                                      on d.objoid = c.oid and
+                                         d.classoid = 'pg_class'::regclass and
+                                         d.objsubid = a.attnum
+                              cross join format_type(a.atttypid, a.atttypmod) as ft(type)
+                              cross join lateral (select pg_get_expr(cd.adbin, cd.adrelid) like 'nextval(%' and
+                                                         pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) is not null) as s(is_serial)
+                              where a.attrelid = c.oid and
+                                    a.attnum > 0 and
+                                    not a.attisdropped) as x) cf
   left join lateral (select format('comment on table "%s"."%s__new" is %L;',
                                    n.nspname,
                                    c.relname,

@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import logging
 import re
+import json
 from pathlib import Path
 
 import asyncpg
@@ -10,13 +11,8 @@ from munch import Munch
 from pg_rebuild_table.acl import acl_to_grants
 from pg_rebuild_table.connection import Database
 
-__version__ = '0.0.4'
+__version__ = '0.1.0'
 
-
-# Кластеризация таблицы по PK
-# Очистка данных
-# TODO: Переупорядочивание колонок
-# TODO: Изменение типа колонки
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s: %(message)s",
@@ -43,7 +39,10 @@ class PgRebuildTable:
         only_validate_constraints,
         chunk_limit,
         statement_timeout,
-        lock_timeout
+        lock_timeout,
+        reorder_columns,
+        set_column_order,
+        set_data_type
     ):
         self.db = db
         self.clean = clean
@@ -65,6 +64,9 @@ class PgRebuildTable:
         self.chunk_limit = chunk_limit
         self.statement_timeout = statement_timeout
         self.lock_timeout = lock_timeout
+        self.reorder_columns = reorder_columns
+        self.set_column_order = set_column_order
+        self.set_data_type = set_data_type
 
     async def _get_table(self):
         self.logger.info(f'Get table info "{self.schema_name}"."{self.table_name}"')
@@ -100,23 +102,45 @@ class PgRebuildTable:
 
     async def _create_table_new(self):
         self.logger.info(f'create table new {self.new_table_full_name}')
+
+        def untype_default(default, column_type):
+            return default.replace("'::"+column_type, "'") \
+                          .replace("'::public."+column_type[-1], "'") \
+                          .replace("'::"+column_type.split('.')[-1], "'")
+
+        columns = []
+        for c in self.table.columns:
+            column = f'{c.name} {c.type}'
+            if c.collate:
+                column += f' collate {c.collate}'
+            if c.not_null:
+                column += f' not null'
+            if c.default:
+                column += f' default {untype_default(c.default, c.type)}'
+            columns.append(column)
+
         async with self.db.conn.transaction():
+            await self._db_exec(f'''create table {self.new_table_full_name}({', '.join(columns)})''')
             await self._db_exec(
-                f'''create table {self.new_table_full_name}(
-                  like {self.table.table_full_name}
-                  including all
-                  excluding indexes
-                  excluding constraints
-                  excluding statistics)'''
+                '\n'.join(
+                    f'''comment on column {self.new_table_full_name}.{c.name} is {c.comment};'''
+                    for c in self.table.columns
+                    if c.comment
+                )
+            )
+            await self._db_exec(
+                '\n'.join(
+                    f'''alter table only {self.new_table_full_name} alter {c.name} set statistics {c.statistics};'''
+                    for c in self.table.columns
+                    if c.statistics
+                )
             )
             await self._db_exec('\n'.join(self.table.storage_parameters))
             await self._db_exec(f'''alter table {self.new_table_full_name} set (autovacuum_enabled = false);''')
             await self._db_exec('\n'.join(self.table.grant_privileges))
             await self._db_exec(f'''alter table {self.new_table_full_name} replica identity {self.table.replica_identity};''')
-            if self.table.comment:
-                await self._db_exec(self.table.comment)
-            if self.table.create_check_constraints:
-                await self._db_exec('\n'.join(self.table.create_check_constraints))
+            await self._db_exec(self.table.comment)
+            await self._db_exec('\n'.join(self.table.create_check_constraints))
         self.logger.info('table new created')
 
     async def _create_trigger_delta_on_table(self):
@@ -179,12 +203,12 @@ class PgRebuildTable:
             )
 
             pk_columns = self.table.pk_columns
-            columns = ', '.join(f'"{c}"' for c in self.table.columns)
-            val_columns = ', '.join(f'r."{c}"' for c in self.table.columns)
+            columns = ', '.join(f'"{c.name}"' for c in self.table.columns)
+            val_columns = ', '.join(f'r."{c.name}"' for c in self.table.columns)
             where = ' and '.join(f't."{c}" = r."{c}"' for c in pk_columns)
-            set_columns = ','.join(f'"{c}" = r."{c}"'
+            set_columns = ','.join(f'"{c.name}" = r."{c.name}"'
                                    for c in self.table.columns
-                                   if c not in pk_columns)
+                                   if c.name not in pk_columns)
 
             await self._db_exec(
                 f'''create or replace
@@ -248,8 +272,8 @@ class PgRebuildTable:
                 prv_columns.append(k)
             pk_predicate_str = f"where ({' or '.join(predicate_groups)})"
         pk_columns = ', '.join(f't."{c}"' for c in self.table.pk_columns)
-        ins_columns = ', '.join(f'"{c}"' for c in self.table.columns)
-        columns = ', '.join(f't."{c}"' for c in self.table.columns)
+        ins_columns = ', '.join(f'"{c.name}"' for c in self.table.columns)
+        columns = ', '.join(f't."{c.name}"' for c in self.table.columns)
 
         if self.chunk_limit and self.table.pk_columns:
             query = f'''
@@ -482,6 +506,24 @@ class PgRebuildTable:
             await self._cleanup()
             return
 
+        if self.reorder_columns:
+            self.table.columns = self.table.ordered_columns
+
+        if self.set_column_order:
+            new_columns = []
+            for column_name in self.set_column_order:
+                new_columns.extend(c for c in self.table.columns if c.name == column_name)
+            if len(new_columns) != len(self.table.columns):
+                self.logger.error('Parameter "set_column_order" with list of columns specified incorrectly...')
+                return
+            self.table.columns = new_columns
+
+        if self.set_data_type:
+            for ct in self.set_data_type:
+                for i, c in enumerate(self.table.columns):
+                    if c.name == ct['name'] and c.type != ct['type']:
+                        self.table.columns[i]['type'] = ct['type']
+
         # FIXME: схема должна создаваться при создании extension
         await self._db_exec(f'create schema if not exists "{self.service_schema}";')
         await self._db_exec(
@@ -639,6 +681,21 @@ class Command:
             help='only validate constraint on "table_full_name"',
         )
         arg_parser.add_argument(
+            '--reorder_columns',
+            action="store_true",
+            help='Reorders columns to reduce the physical disk space required to store data tuples.',
+        )
+        arg_parser.add_argument(
+            '--set_column_order',
+            type=lambda s: [str(item) for item in s.split(',')],
+            help='Сhange column order.',
+        )
+        arg_parser.add_argument(
+            '--set_data_type',
+            type=json.loads,
+            help='Сhange column data type.',
+        )
+        arg_parser.add_argument(
             '-d',
             '--dbname',
             help='source database name'
@@ -663,7 +720,10 @@ class Command:
             only_validate_constraints=args.only_validate_constraints,
             chunk_limit=args.chunk_limit,
             statement_timeout=args.statement_timeout,
-            lock_timeout=args.lock_timeout
+            lock_timeout=args.lock_timeout,
+            reorder_columns=args.reorder_columns,
+            set_column_order=args.set_column_order,
+            set_data_type=args.set_data_type
         )
 
         self.components = [db, pg_rebuild_table]
