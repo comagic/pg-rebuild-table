@@ -11,7 +11,7 @@ from munch import Munch
 from pg_rebuild_table.acl import acl_to_grants
 from pg_rebuild_table.connection import Database
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 
 logging.basicConfig(
@@ -442,6 +442,17 @@ class PgRebuildTable:
                     await self._db_exec('\n'.join(self.table.create_triggers))
                     await self._db_exec('\n'.join(self.table.create_views))
                     await self._db_exec('\n'.join(self.table.comment_views))
+                    await self._db_exec(
+                        '\n'.join((
+                            acl_to_grants(
+                                params['acl'],
+                                'column',
+                                self.table.table_full_name,
+                                params['name'])
+                            for params in self.table.columns
+                            if params['acl']
+                        ))
+                    )
                     await self._db_exec(
                         '\n'.join((
                             acl_to_grants(
