@@ -92,12 +92,20 @@ Options:
 
 Examples:
 --------------------
-- Rebuild the table with data that satisfies the condition. transfusion of data to carry out in chunks of 100,000 lines.
+- **Rebuild the table with data that satisfies the condition. transfusion of data to carry out in chunks of 100,000 lines.**
+
 ``pg_rebuild_table -p 5432 -h /tmp -d database_name --chunk_limit 100000 -T employee -ac 't.app_id in (select app.id from app)'``
+
 ``pg_rebuild_table -p 5432 -h /tmp -d database_name --chunk_limit 100000 -T employee -ac 't.group_id in (43597,43789,43791,44229)'``
-- Rebuild the data table with automatic reordering of columns for better storage of data tuples. transfusion of data should be carried out in portions of 100,000 lines. Sometimes compresses the amount of data.
+
+- **Rebuild the data table with automatic reordering of columns for better storage of data tuples. transfusion of data should be carried out in portions of 100,000 lines. Sometimes compresses the amount of data.**
+
 ``pg_rebuild_table -p 5432 -h /tmp -d database_name --chunk_limit 100000 -T employee --reorder_columns``
-- When rebuilding the table, change the order of the columns.
+
+- **When rebuilding the table, change the order of the columns.**
+
 ``pg_rebuild_table -p 5432 -h /tmp -d database_name -T employee --set_column_order id,app_id,first_visit,url,title,site_id``
-- When rebuilding the table, change the data type of the "app_id" and "group_id" columns from "int" to "bigint".
+
+- **When rebuilding the table, change the data type of the "app_id" and "group_id" columns from "int" to "bigint".**
+
 ``pg_rebuild_table -p 5432 -h /tmp -d database_name -T employee --set_data_type '[{"name":"app_id", "type":"bigint"}, {"name":"group_id", "type":"bigint"}]'``
