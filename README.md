@@ -6,7 +6,7 @@ Description:
 The utility rebuilds the table without downtime and long locks.
 Available ways to rebuild the table:
 - with full repacking of table data (similar to VACUUM FULL or pg_repack);
-- with partial repacking of data according to a given predicate (DELETE FROM TABLE + VACUUM FULL or pg_repack);
+- with partial repacking of data according to a given predicate (DELETE FROM TABLE_NAME WHERE ...  + VACUUM FULL or pg_repack);
 - with automatic reordering of columns for optimal storage of data tuples;
 - with custom reordering of columns;
 - with changing the data type of the columns;
