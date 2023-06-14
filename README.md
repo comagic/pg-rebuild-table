@@ -15,10 +15,6 @@ Dependency:
 --------------------
 - python>=3.8
 
---------------------
-Tested on postgresql 12.*
---------------------
-
 Restrictions:
 --------------------
 - Only superusers can use the utility.
@@ -27,24 +23,27 @@ Restrictions:
 
 Basic approach:
 --------------------
-# create new tables TABLE_NAME__new and TABLE_NAME__delta
-# create trigger z_rebuild_table__delta wich fixing all changes from TABLE_NAME to TABLE_NAME__delta
-# copy data from TABLE_NAME to TABLE_NAME__new
-# create indexes for TABLE_NAME__new
-# analyze TABLE_NAME__new
-# apply delta from TABLE_NAME__delta to TABLE_NAME__new (in loop while last rows > 10000)
-# switch TABLE_NAME to TABLE_NAME__new
-## start transaction begin;
-## exclusive lock TABLE_NAME;
-## apply delta
-## drop depend functions, views, constraints;
-## link sequences to TABLE_NAME__new
-## drop table TABLE_NAME;
-## rename table TABLE_NAME__new to TABLE_NAME;
-## create depend functions, triggers, views, constraints (not valid), rules, add to publications;
-## commit;
-## validate constraints
+1. create new tables TABLE_NAME__new and TABLE_NAME__delta
+2. create trigger z_rebuild_table__delta wich fixing all changes from TABLE_NAME to TABLE_NAME__delta
+3. copy data from TABLE_NAME to TABLE_NAME__new
+4. create indexes for TABLE_NAME__new
+5. analyze TABLE_NAME__new
+6. apply delta from TABLE_NAME__delta to TABLE_NAME__new (in loop while last rows > 10000)
+7. switch TABLE_NAME to TABLE_NAME__new
+8. start transaction begin;
+8.1. exclusive lock TABLE_NAME;
+8.2. apply delta
+8.3. drop depend functions, views, constraints;
+8.4. link sequences to TABLE_NAME__new
+8.5. drop table TABLE_NAME;
+8.6. rename table TABLE_NAME__new to TABLE_NAME;
+8.7. create depend functions, triggers, views, constraints (not valid), rules, add to publications;
+8.8 commit;
+9. validate constraints
 
+********************
+Tested on PostgreSql 12.*
+********************
 
 Options:
 --------------------
