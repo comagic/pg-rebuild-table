@@ -7,7 +7,7 @@ REPO_GROUP = 'pg-tools'
 REPO_NAME = 'pg-rebuild-table'
 PACKAGE_DESC = f'{REPO_GROUP} {REPO_NAME}'
 PACKAGE_LONG_DESC = 'The script rebuilds the table'
-PACKAGE_VERSION = '0.1.1'
+PACKAGE_VERSION = '0.1.2'
 
 
 # Используем ручной запуск с помощью класса PyTest

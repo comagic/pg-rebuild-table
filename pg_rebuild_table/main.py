@@ -11,7 +11,7 @@ from munch import Munch
 from pg_rebuild_table.acl import acl_to_grants
 from pg_rebuild_table.connection import Database
 
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 
 logging.basicConfig(
@@ -92,10 +92,10 @@ class PgRebuildTable:
         self.logger.info('structure cleaning')
         async with self.db.conn.transaction():
             if clean:
-                await self._db_exec(f'drop trigger if exists replicate__delta on {self.table.table_full_name}')
+                await self._db_exec(f'drop trigger if exists z_rebuild_table__delta on {self.table.table_full_name}')
                 await self._db_exec(f'drop table if exists {self.new_table_full_name}')
             else:
-                await self._db_exec(f'drop trigger if exists replicate__delta on {self.service_schema}."{self.table.schema_name}__{self.table.table_name}"')
+                await self._db_exec(f'drop trigger if exists z_rebuild_table__delta on {self.service_schema}."{self.table.schema_name}__{self.table.table_name}"')
             await self._db_exec(f'drop function if exists "{self.table.schema_name}"."{self.table.table_name}__apply_delta"')
             await self._db_exec(f'drop function if exists "{self.table.schema_name}"."{self.table.table_name}__delta"')
             await self._db_exec(f'drop table if exists "{self.table.schema_name}"."{self.table.table_name}__delta"')
@@ -144,7 +144,7 @@ class PgRebuildTable:
         self.logger.info('table new created')
 
     async def _create_trigger_delta_on_table(self):
-        self.logger.info('create trigger replicate__delta')
+        self.logger.info('create trigger z_rebuild_table__delta')
         while True:
             try:
                 async with self.db.conn.transaction():
@@ -152,7 +152,7 @@ class PgRebuildTable:
                     await self._cancel_autovacuum()
                     await self._db_exec(
                         f'''
-                        create trigger "replicate__delta"
+                        create trigger "z_rebuild_table__delta"
                         after insert or delete or update on "{self.table.schema_name}"."{self.table.table_name}"
                         for each row execute procedure "{self.table.schema_name}"."{self.table.table_name}__delta"();
                         '''
@@ -161,8 +161,8 @@ class PgRebuildTable:
             except asyncpg.exceptions.LockNotAvailableError:
                 self.logger.warning('create trigger failed')
                 await asyncio.sleep(20)
-                self.logger.info('try create trigger replicate__delta')
-        self.logger.info('trigger replicate__delta created')
+                self.logger.info('try create trigger z_rebuild_table__delta')
+        self.logger.info('trigger z_rebuild_table__delta created')
 
     async def _create_objects_delta(self):
         self.logger.info(f'create table delta {self.delta_table_full_name}')

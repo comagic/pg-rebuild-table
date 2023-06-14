@@ -54,22 +54,10 @@ select n.nspname as schema_name,
                             json_agg(x.column order by x.typlen desc, x.key, x.typname, x.attname) as ordered_columns
                        from (select json_build_object(
                                       'name', quote_ident(a.attname),
-                                      'type', case
-                                                when s.is_serial
-                                                  then case ft.type
-                                                         when 'integer'
-                                                           then 'serial'
-                                                         when 'bigint'
-                                                           then 'bigserial'
-                                                       end
-                                                else ft.type
-                                              end,
+                                      'type', ft.type,
                                       'collate', quote_ident(coll.collname),
-                                      'not_null', a.attnotnull and not s.is_serial,
-                                      'default', case
-                                                   when not s.is_serial
-                                                     then pg_get_expr(cd.adbin, cd.adrelid)
-                                                 end,
+                                      'not_null', a.attnotnull,
+                                      'default', pg_get_expr(cd.adbin, cd.adrelid),
                                       'comment', quote_literal(d.description),
                                       'acl', a.attacl,
                                       'statistics', nullif(a.attstattarget, -1)
@@ -98,8 +86,6 @@ select n.nspname as schema_name,
                                          d.classoid = 'pg_class'::regclass and
                                          d.objsubid = a.attnum
                               cross join format_type(a.atttypid, a.atttypmod) as ft(type)
-                              cross join lateral (select pg_get_expr(cd.adbin, cd.adrelid) like 'nextval(%' and
-                                                         pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) is not null) as s(is_serial)
                               where a.attrelid = c.oid and
                                     a.attnum > 0 and
                                     not a.attisdropped) as x) cf

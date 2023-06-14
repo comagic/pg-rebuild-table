@@ -11,10 +11,40 @@ Installation:
 
   ``pip install -e ./pg-rebuild-table/``
 
+Dependency:
+--------------------
+- python>=3.8
+
+--------------------
+Tested on postgresql 12.*
+--------------------
+
 Restrictions:
 --------------------
 - Only superusers can use the utility.
 - Target table must have a PRIMARY KEY.
+- Trigger "z_rebuild_table__delta" must be the last trigger in the "before" set.
+
+Basic approach:
+--------------------
+# create new tables TABLE_NAME__new and TABLE_NAME__delta
+# create trigger z_rebuild_table__delta wich fixing all changes from TABLE_NAME to TABLE_NAME__delta
+# copy data from TABLE_NAME to TABLE_NAME__new
+# create indexes for TABLE_NAME__new
+# analyze TABLE_NAME__new
+# apply delta from TABLE_NAME__delta to TABLE_NAME__new (in loop while last rows > 10000)
+# switch TABLE_NAME to TABLE_NAME__new
+## start transaction begin;
+## exclusive lock TABLE_NAME;
+## apply delta
+## drop depend functions, views, constraints;
+## link sequences to TABLE_NAME__new
+## drop table TABLE_NAME;
+## rename table TABLE_NAME__new to TABLE_NAME;
+## create depend functions, triggers, views, constraints (not valid), rules, add to publications;
+## commit;
+## validate constraints
+
 
 Options:
 --------------------
@@ -43,7 +73,7 @@ Options:
 
         -W
         --password
-            Force pg_rebuild_table to prompt for a password before connecting to a database.
+            Password to connect to the database.
 
         -d
         --dbname
@@ -57,37 +87,35 @@ Options:
 
         -ac
         --additional_condition
-            An optional condition on which the data will be recollected
+            An optional parameter in which you can set a parent for pouring data into a table with a new structure. (example: 't.group_id in (select g.id from group g where not g.is_removed)')
 
         -cl
         --chunk_limit
-            Data packet size when rebuilding tabular data collection. By default the table overlaps completely in one pass'
+            An optional parameter that specifies the size of data portions that will be poured into a table with a new structure, which will be split into separate transactions.
+By default, table data overflows in one pass.
 
         -st
         --statement_timeout
-            Abort any statement that takes more than the specified number of milliseconds, starting from the time the command arrives at the server from the client. The default is 900000 seconds
+            Abort any statement that takes more than the specified number of milliseconds, starting from the time the command arrives at the server from the client. The default is 900000 seconds.
 
         -lt
         --lock_timeout
             Abort any statement that waits longer than the specified number of milliseconds while attempting to acquire a lock on a table, index, row, or other database object. default 1 second.
 
         --make_backup
-            If the parameter is set, then the old version of the table is migrated along with the data to the rebuild_table schema.
-
-        --only_switch
-            If the parameter is set, then only the replacement of the old table with the new assembled table is performed. It is relevant if the script prepared a new table with data, but could not perform the substitution for a long time. ("table_full_name__new"->"table_full_name")
+            If the parameter is set, then the old version of the table is not deleted, but migrated along with the data to the rebuild_table schema.
 
         --only_validate_constraints
-            If the parameter is set, then invalid constraints on the table are searched for and validation is started.
+            If the parameter is set, then only the search for invalid constraints for the table is performed and validation is started.
 
         --reorder_columns
-            If the parameter is set, then кeorders columns to reduce the physical disk space required to store data tuples.
+            If the parameter is set, then the order of the columns is determined in such a way that the data tuple occupies the minimum disk space.
 
         --set_column_order
-            Сhange column order.
+            The parameter is passed a list of columns that determines the new order in which they are placed. (example: 'col1,col2,col3')
 
         --set_data_type
-            Сhange column data type.
+            The parameter is passed a list of dictionaries in which the new column type is specified. (example: [{"name":"col1", "type":"bigint"}])
 
 
 Examples:
