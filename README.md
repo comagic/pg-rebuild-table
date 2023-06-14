@@ -33,6 +33,7 @@ Restrictions:
 
 Basic approach:
 --------------------
+```no-highlight
 1. create new tables TABLE_NAME__new and TABLE_NAME__delta
 2. create trigger z_rebuild_table__delta wich fixing all changes from TABLE_NAME to TABLE_NAME__delta
 3. copy data from TABLE_NAME to TABLE_NAME__new
@@ -40,7 +41,7 @@ Basic approach:
 5. analyze TABLE_NAME__new
 6. apply delta from TABLE_NAME__delta to TABLE_NAME__new (in loop while last rows > 10000)
 7. switch TABLE_NAME to TABLE_NAME__new
-8. start transaction begin;
+8. start transaction begin:
 8.1. exclusive lock TABLE_NAME;
 8.2. apply delta
 8.3. drop depend functions, views, constraints;
@@ -48,8 +49,9 @@ Basic approach:
 8.5. drop table TABLE_NAME;
 8.6. rename table TABLE_NAME__new to TABLE_NAME;
 8.7. create depend functions, triggers, views, constraints (not valid), rules, add to publications;
-8.8 commit;
+8.8. commit;
 9. validate constraints
+```
 
 ********************
 Tested on PostgreSql 12.*
