@@ -8,7 +8,9 @@ class Database:
     conn: asyncpg.Connection = None
     logger = logging.getLogger('Database')
 
-    def __init__(self, host, port, username, password, dbname):
+    def __init__(self, host, port, username, password, dbname, logging_level):
+        if logging_level.upper() == 'DEBUG':
+            self.logger.setLevel(logging.DEBUG)
         self.host = host
         self.port = port
         self.username = username

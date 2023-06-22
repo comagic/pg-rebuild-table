@@ -42,8 +42,11 @@ class PgRebuildTable:
         lock_timeout,
         reorder_columns,
         set_column_order,
-        set_data_type
+        set_data_type,
+        logging_level,
     ):
+        if logging_level.upper() == 'DEBUG':
+            self.logger.setLevel(logging.DEBUG)
         self.db = db
         self.clean = clean
         self.only_steps = []
@@ -91,6 +94,7 @@ class PgRebuildTable:
     async def _cleanup(self, clean=True):
         self.logger.info('structure cleaning')
         async with self.db.conn.transaction():
+            await self._db_exec(f"set local lock_timeout = '{self.lock_timeout}';")
             if clean:
                 await self._db_exec(f'drop trigger if exists z_rebuild_table__delta on {self.table.table_full_name}')
                 await self._db_exec(f'drop table if exists {self.new_table_full_name}')
@@ -203,10 +207,10 @@ class PgRebuildTable:
             )
 
             pk_columns = self.table.pk_columns
-            columns = ', '.join(f'"{c.name}"' for c in self.table.columns)
-            val_columns = ', '.join(f'r."{c.name}"' for c in self.table.columns)
-            where = ' and '.join(f't."{c}" = r."{c}"' for c in pk_columns)
-            set_columns = ','.join(f'"{c.name}" = r."{c.name}"'
+            columns = ', '.join(f'{c.name}' for c in self.table.columns)
+            val_columns = ', '.join(f'r.{c.name}' for c in self.table.columns)
+            where = ' and '.join(f't.{c} = r.{c}' for c in pk_columns)
+            set_columns = ','.join(f'{c.name} = r.{c.name}'
                                    for c in self.table.columns
                                    if c.name not in pk_columns)
 
@@ -262,18 +266,18 @@ class PgRebuildTable:
             predicate_groups = []
             for k in self.table.pk_columns:
                 predicate = ' and '.join(
-                    f't."{c}" = {pk_value[c]}'
+                    f't.{c} = {pk_value[c]}'
                     for c in prv_columns
                 )
                 if predicate:
                     predicate += ' and '
-                predicate += f'''t."{k}" > '{pk_value[k]}' '''
+                predicate += f'''t.{k} > '{pk_value[k]}' '''
                 predicate_groups.append(f'({predicate})')
                 prv_columns.append(k)
             pk_predicate_str = f"where ({' or '.join(predicate_groups)})"
-        pk_columns = ', '.join(f't."{c}"' for c in self.table.pk_columns)
-        ins_columns = ', '.join(f'"{c.name}"' for c in self.table.columns)
-        columns = ', '.join(f't."{c.name}"' for c in self.table.columns)
+        pk_columns = ', '.join(f't.{c}' for c in self.table.pk_columns)
+        ins_columns = ', '.join(f'{c.name}' for c in self.table.columns)
+        columns = ', '.join(f't.{c.name}' for c in self.table.columns)
 
         if self.chunk_limit and self.table.pk_columns:
             query = f'''
@@ -711,6 +715,12 @@ class Command:
             '--dbname',
             help='source database name'
         )
+        arg_parser.add_argument(
+            '-ll',
+            '--logging_level',
+            default='INFO',
+            help='Logging Level'
+        )
         args = arg_parser.parse_args()
 
         db = Database(
@@ -718,7 +728,8 @@ class Command:
             port=args.port,
             username=args.username,
             password=args.password,
-            dbname=args.dbname
+            dbname=args.dbname,
+            logging_level=args.logging_level
         )
 
         pg_rebuild_table = PgRebuildTable(
@@ -734,7 +745,8 @@ class Command:
             lock_timeout=args.lock_timeout,
             reorder_columns=args.reorder_columns,
             set_column_order=args.set_column_order,
-            set_data_type=args.set_data_type
+            set_data_type=args.set_data_type,
+            logging_level=args.logging_level
         )
 
         self.components = [db, pg_rebuild_table]

@@ -50,8 +50,8 @@ select n.nspname as schema_name,
   left join pg_index ind
          on ind.indrelid = c.oid and
             ind.indisreplident
- cross join lateral (select json_agg(x.column order by x.attnum) as columns,
-                            json_agg(x.column order by x.typlen desc, x.key, x.typname, x.attname) as ordered_columns
+ cross join lateral (select json_agg(quote_ident(x.column) order by x.attnum) as columns,
+                            json_agg(quote_ident(x.column) order by x.typlen desc, x.key, x.typname, x.attname) as ordered_columns
                        from (select json_build_object(
                                       'name', quote_ident(a.attname),
                                       'type', ft.type,
@@ -114,7 +114,7 @@ select n.nspname as schema_name,
                        from pg_rewrite rw
                       cross join pg_get_ruledef(rw.oid) as rd(def)
                       where rw.ev_class = c.oid) as rl
- cross join lateral (select coalesce(array_agg(pat.attname order by ck.rn), '{}') as pk_columns
+ cross join lateral (select coalesce(array_agg(quote_ident(pat.attname) order by ck.rn), '{}') as pk_columns
                        from pg_constraint p
                       cross join unnest(p.conkey) with ordinality ck(key, rn)
                       inner join pg_attribute pat
