@@ -50,8 +50,8 @@ select n.nspname as schema_name,
   left join pg_index ind
          on ind.indrelid = c.oid and
             ind.indisreplident
- cross join lateral (select json_agg(quote_ident(x.column) order by x.attnum) as columns,
-                            json_agg(quote_ident(x.column) order by x.typlen desc, x.key, x.typname, x.attname) as ordered_columns
+ cross join lateral (select json_agg(x.column order by x.attnum) as columns,
+                            json_agg(x.column order by x.typlen desc, x.key, x.typname, x.attname) as ordered_columns
                        from (select json_build_object(
                                       'name', quote_ident(a.attname),
                                       'type', ft.type,

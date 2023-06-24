@@ -11,7 +11,7 @@ from munch import Munch
 from pg_rebuild_table.acl import acl_to_grants
 from pg_rebuild_table.connection import Database
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 
 logging.basicConfig(
