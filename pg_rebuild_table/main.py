@@ -26,7 +26,6 @@ class PgRebuildTable:
     logger = logging.getLogger('PgRebuildTable')
     service_schema = 'rebuild_table'
     min_delta_rows = 10000
-    work_mem = '1GB'
 
     def __init__(
         self,
@@ -38,8 +37,6 @@ class PgRebuildTable:
         only_switch,
         only_validate_constraints,
         chunk_limit,
-        statement_timeout,
-        lock_timeout,
         reorder_columns,
         set_column_order,
         set_data_type,
@@ -65,8 +62,6 @@ class PgRebuildTable:
         self.additional_condition = additional_condition
         self.make_backup = make_backup
         self.chunk_limit = chunk_limit
-        self.statement_timeout = statement_timeout
-        self.lock_timeout = lock_timeout
         self.reorder_columns = reorder_columns
         self.set_column_order = set_column_order
         self.set_data_type = set_data_type
@@ -84,6 +79,7 @@ class PgRebuildTable:
         )
         self.new_table_full_name = f'"{self.table.schema_name}"."{self.table.table_name}__new"'
         self.delta_table_full_name = f'"{self.table.schema_name}"."{self.table.table_name}__delta"'
+        self.apply_delta_func_name = f'"{self.table.schema_name}"."{self.table.table_name}__apply_delta"'
 
     async def _db_exec(self, query):
         if query:
@@ -92,17 +88,16 @@ class PgRebuildTable:
             self.logger.debug('db executed')
 
     async def _cleanup(self, clean=True):
-        self.logger.info('structure cleaning')
-        async with self.db.conn.transaction():
-            await self._db_exec(f"set local lock_timeout = '{self.lock_timeout}';")
+        if self.table:
+            self.logger.info('deleting helper objects...')
+            await self._db_exec(f'drop trigger if exists z_rebuild_table__delta on {self.table.table_full_name}')
+            await self._db_exec(f'drop trigger if exists z_rebuild_table__delta on "{self.service_schema}"."{self.table.table_name}"')
             if clean:
-                await self._db_exec(f'drop trigger if exists z_rebuild_table__delta on {self.table.table_full_name}')
                 await self._db_exec(f'drop table if exists {self.new_table_full_name}')
-            else:
-                await self._db_exec(f'drop trigger if exists z_rebuild_table__delta on {self.service_schema}."{self.table.schema_name}__{self.table.table_name}"')
-            await self._db_exec(f'drop function if exists "{self.table.schema_name}"."{self.table.table_name}__apply_delta"')
-            await self._db_exec(f'drop function if exists "{self.table.schema_name}"."{self.table.table_name}__delta"')
-            await self._db_exec(f'drop table if exists "{self.table.schema_name}"."{self.table.table_name}__delta"')
+            await self._db_exec(f'drop function if exists {self.apply_delta_func_name}')
+            await self._db_exec(f'drop function if exists {self.delta_table_full_name}')
+            await self._db_exec(f'drop table if exists {self.delta_table_full_name}')
+            self.logger.info('helper objects removed')
 
     async def _create_table_new(self):
         self.logger.info(f'create table new {self.new_table_full_name}')
@@ -148,11 +143,10 @@ class PgRebuildTable:
         self.logger.info('table new created')
 
     async def _create_trigger_delta_on_table(self):
-        self.logger.info('create trigger z_rebuild_table__delta')
         while True:
+            self.logger.info('create trigger z_rebuild_table__delta')
             try:
                 async with self.db.conn.transaction():
-                    await self._db_exec(f"set local lock_timeout = '{self.lock_timeout}';")
                     await self._cancel_autovacuum()
                     await self._db_exec(
                         f'''
@@ -163,9 +157,8 @@ class PgRebuildTable:
                     )
                 break
             except asyncpg.exceptions.LockNotAvailableError:
-                self.logger.warning('create trigger failed')
+                self.logger.warning('Create trigger z_rebuild_table__delta failed. Try in 20 seconds.')
                 await asyncio.sleep(20)
-                self.logger.info('try create trigger z_rebuild_table__delta')
         self.logger.info('trigger z_rebuild_table__delta created')
 
     async def _create_objects_delta(self):
@@ -216,7 +209,7 @@ class PgRebuildTable:
 
             await self._db_exec(
                 f'''create or replace
-                    function "{self.table.schema_name}"."{self.table.table_name}__apply_delta"() returns integer as $$
+                    function {self.apply_delta_func_name}() returns integer as $$
                     declare
                       r record;
                       rows integer := 0;
@@ -323,15 +316,11 @@ class PgRebuildTable:
             while True:
                 query = self._get_copy_query(pk_value)
                 async with self.db.conn.transaction():
-                    await self._db_exec(f"set local statement_timeout = {self.statement_timeout};")
-                    await self._db_exec(f"set local work_mem = '{self.work_mem}';")
                     pk_value = await self.db.conn.fetchrow(query)
                     if not pk_value:
                         break
         else:
             async with self.db.conn.transaction():
-                await self._db_exec(f"set local statement_timeout = {self.statement_timeout};")
-                await self._db_exec(f"set local work_mem = '{self.work_mem}';")
                 await self._db_exec(self._get_copy_query())
         self.logger.info('table data copied')
 
@@ -380,7 +369,7 @@ class PgRebuildTable:
     async def _apply_delta(self):
         self.logger.info('apply data delta')
         rows = await self.db.conn.fetchrow(
-            f'''select "{self.table.schema_name}"."{self.table.table_name}__apply_delta"() as rows;'''
+            f'''select {self.apply_delta_func_name}() as rows;'''
         )
         self.logger.info('data delta applied')
         return rows['rows']
@@ -403,7 +392,6 @@ class PgRebuildTable:
         while True:
             try:
                 async with self.db.conn.transaction():
-                    await self._db_exec(f"set local lock_timeout = '{self.lock_timeout}';")
                     await self._apply_delta()
                     await self._cancel_autovacuum()
                     self.logger.info(f'lock table {self.table.table_full_name}')
@@ -421,15 +409,14 @@ class PgRebuildTable:
                             await self._db_exec(f'alter table {self.table.table_full_name} no inherit {self.table.inhparent}')
 
                     if self.make_backup:
-                        self.logger.info(f'backup table {self.table.table_name}')
-                        await self._db_exec(f'alter table {self.table.table_full_name} rename to "{self.table.schema_name}__{self.table.table_name}";')
-                        await self._db_exec(f'alter table "{self.table.schema_name}"."{self.table.schema_name}__{self.table.table_name}" set schema {self.service_schema};')
+                        self.logger.info(f'backup table {self.table.table_full_name}')
+                        await self._db_exec(f'alter table {self.table.table_full_name} set schema {self.service_schema};')
                     else:
-                        self.logger.info(f'drop table {self.table.table_name}')
+                        self.logger.info(f'drop table {self.table.table_full_name}')
                         await self._db_exec(f'drop table {self.table.table_full_name};')
 
                     await self._cleanup(False)
-                    self.logger.info(f'rename table {self.table.table_name}__new -> {self.table.table_name}')
+                    self.logger.info(f'rename table {self.new_table_full_name} -> {self.table.table_name}')
                     await self._db_exec(f'alter table {self.new_table_full_name} rename to "{self.table.table_name}";')
 
                     if self.table.inhparent:
@@ -480,9 +467,8 @@ class PgRebuildTable:
                     await self._db_exec(f'alter table {self.table.table_full_name} reset (autovacuum_enabled);')
                     break
             except asyncpg.exceptions.LockNotAvailableError:
-                self.logger.warning('lock table failed')
+                self.logger.warning('Lock table failed. Try in 20 seconds.')
                 await asyncio.sleep(20)
-                self.logger.info('try lock table')
                 await self._apply_delta()
             except Exception as e:
                 self.logger.error(f'switch table: {e}')
@@ -671,7 +657,7 @@ class Command:
             '--statement_timeout',
             type=str,
             help='maximum request execution time.',
-            default=900000
+            default='900000'
         )
         arg_parser.add_argument(
             '-lt',
@@ -679,6 +665,12 @@ class Command:
             type=str,
             help='specifying the period of time that must elapse before an attempt to acquire a lock is abandoned. (example: 1s or 1min or 1h)',
             default='1s'
+        )
+        arg_parser.add_argument(
+            '--work_mem',
+            type=str,
+            help='Sets the maximum amount of memory to be used by a query operation (such as a sort or hash table) before writing to temporary disk files. The default value is four megabytes (4MB)',
+            default='4MB'
         )
         arg_parser.add_argument(
             '--make_backup',
@@ -729,6 +721,9 @@ class Command:
             username=args.username,
             password=args.password,
             dbname=args.dbname,
+            lock_timeout=args.lock_timeout,
+            statement_timeout=args.statement_timeout,
+            work_mem=args.work_mem,
             logging_level=args.logging_level
         )
 
@@ -741,8 +736,6 @@ class Command:
             only_switch=args.only_switch,
             only_validate_constraints=args.only_validate_constraints,
             chunk_limit=args.chunk_limit,
-            statement_timeout=args.statement_timeout,
-            lock_timeout=args.lock_timeout,
             reorder_columns=args.reorder_columns,
             set_column_order=args.set_column_order,
             set_data_type=args.set_data_type,

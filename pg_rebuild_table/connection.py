@@ -8,7 +8,7 @@ class Database:
     conn: asyncpg.Connection = None
     logger = logging.getLogger('Database')
 
-    def __init__(self, host, port, username, password, dbname, logging_level):
+    def __init__(self, host, port, username, password, dbname, lock_timeout, statement_timeout, work_mem, logging_level):
         if logging_level.upper() == 'DEBUG':
             self.logger.setLevel(logging.DEBUG)
         self.host = host
@@ -18,7 +18,10 @@ class Database:
         self.dbname = dbname
         self.server_settings = {
             'application_name': 'pg_rebuild_table',
-            # 'search_path': 'public'
+            'search_path': 'public',
+            'lock_timeout': lock_timeout,
+            'statement_timeout': statement_timeout,
+            'work_mem': work_mem,
         }
 
     async def start(self):
