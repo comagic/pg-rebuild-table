@@ -11,7 +11,7 @@ from munch import Munch
 from pg_rebuild_table.acl import acl_to_grants
 from pg_rebuild_table.connection import Database
 
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 
 
 logging.basicConfig(
@@ -33,6 +33,7 @@ class PgRebuildTable:
         table_full_name,
         additional_condition,
         make_backup,
+        make_vacuum_analyze,
         clean,
         only_switch,
         only_validate_constraints,
@@ -61,6 +62,7 @@ class PgRebuildTable:
                 self.table_name = table_full_name[0]
         self.additional_condition = additional_condition
         self.make_backup = make_backup
+        self.make_vacuum_analyze = make_vacuum_analyze
         self.chunk_limit = chunk_limit
         self.reorder_columns = reorder_columns
         self.set_column_order = set_column_order
@@ -343,6 +345,11 @@ class PgRebuildTable:
         if res:
             self.logger.info('autovacuum canceled')
 
+    async def _vacuum_analyze(self):
+        self.logger.info(f'vacuum analyze table {self.new_table_full_name}')
+        await self._db_exec(f'analyze {self.new_table_full_name}')
+        self.logger.info(f'vacuum and analysis for table {self.new_table_full_name} done')
+
     async def _analyze(self):
         self.logger.info(f'analyze table {self.new_table_full_name}')
         await self._db_exec(f'analyze {self.new_table_full_name}')
@@ -558,7 +565,10 @@ class PgRebuildTable:
             await self._create_trigger_delta_on_table()
             await self._copy_data()
             await self._create_indexes()
-            await self._analyze()
+            if self.make_vacuum_analyze:
+                await self._vacuum_analyze()
+            else:
+                await self._analyze()
 
         if 'switch' in self.only_steps or not self.only_steps:
             await self._switch_table()
@@ -678,6 +688,11 @@ class Command:
             help='make a table backup',
         )
         arg_parser.add_argument(
+            '--make_vacuum_analyze',
+            action="store_true",
+            help='make a vacuum and analyze the table. hint bits are recommended.',
+        )
+        arg_parser.add_argument(
             '--only_switch',
             action="store_true",
             help='only switch if exists table "table_full_name__new"->"table_full_name"',
@@ -732,6 +747,7 @@ class Command:
             table_full_name=args.table_full_name,
             additional_condition=args.additional_condition,
             make_backup=args.make_backup,
+            make_vacuum_analyze=args.make_vacuum_analyze,
             clean=args.clean,
             only_switch=args.only_switch,
             only_validate_constraints=args.only_validate_constraints,
