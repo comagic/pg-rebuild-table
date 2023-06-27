@@ -641,14 +641,14 @@ class Command:
             '-j',
             '--jobs',
             type=int,
-            help='number of connections.',
+            help='number of connections (default=%(default)s).',
             default=2
         )
         arg_parser.add_argument(
             '-T',
             '--table_full_name',
             type=str,
-            help='table full name.',
+            required=True
         )
         arg_parser.add_argument(
             '-ac',
@@ -666,20 +666,20 @@ class Command:
             '-st',
             '--statement_timeout',
             type=str,
-            help='maximum request execution time.',
+            help='maximum request execution time (default=%(default)s).',
             default='900000'
         )
         arg_parser.add_argument(
             '-lt',
             '--lock_timeout',
             type=str,
-            help='specifying the period of time that must elapse before an attempt to acquire a lock is abandoned. (example: 1s or 1min or 1h)',
+            help='specifying the period of time that must elapse before an attempt to acquire a lock is abandoned (example: 1s or 1min or 1h, default=%(default)s).',
             default='1s'
         )
         arg_parser.add_argument(
             '--work_mem',
             type=str,
-            help='Sets the maximum amount of memory to be used by a query operation (such as a sort or hash table) before writing to temporary disk files. The default value is four megabytes (4MB)',
+            help='Sets the maximum amount of memory to be used by a query operation (such as a sort or hash table) before writing to temporary disk files (default=%(default)s).',
             default='4MB'
         )
         arg_parser.add_argument(
@@ -726,7 +726,7 @@ class Command:
             '-ll',
             '--logging_level',
             default='INFO',
-            help='Logging Level'
+            help='Logging level (default=%(default)s).'
         )
         args = arg_parser.parse_args()
 
